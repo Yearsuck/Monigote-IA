@@ -1,0 +1,228 @@
+import pygame
+import os
+import random
+import math
+import sys
+import neat
+
+pygame.init()
+
+ALTURA_PANTALLA = 600
+AMPLADA_PANTALLA = 1100
+RESOLUCIO = pygame.display.set_mode((AMPLADA_PANTALLA, ALTURA_PANTALLA))
+
+CORRER = [pygame.image.load(os.path.join("../AI Monigote/Assets/Dino", "MonigoteRun1.png")),
+          pygame.image.load(os.path.join("../AI Monigote/Assets/Dino", "MonigoteRun2.png"))]
+
+SALTAR = pygame.image.load(os.path.join("../AI Monigote/Assets/Dino", "MonigoteJump.png"))
+
+OBSTACLE_BAIX = [pygame.image.load(os.path.join("../AI Monigote/Assets/Obstacles", "Gnomo1.png")),
+                 pygame.image.load(os.path.join("../AI Monigote/Assets/Obstacles", "Gnomo2.png")),
+                 pygame.image.load(os.path.join("../AI Monigote/Assets/Obstacles", "Gnomo3.png"))]
+OBSTACLE_ALT = [pygame.image.load(os.path.join("../AI Monigote/Assets/Obstacles", "GIGANOTO.png")),
+                pygame.image.load(os.path.join("../AI Monigote/Assets/Obstacles", "Fuertaco.png")),
+                pygame.image.load(os.path.join("../AI Monigote/Assets/Obstacles", "GranHome.png"))]
+
+FONS_JOC = pygame.image.load(os.path.join("../AI Monigote/Assets/Other", "Track.png"))
+
+TEXT = pygame.font.Font('freesansbold.ttf', 20)
+
+
+class Pibe:
+    X_POS = 80
+    Y_POS = 310
+    JUMP_VEL = 7
+
+    def __init__(Pibe, img=CORRER[0]):
+        Pibe.image = img
+        Pibe.POV_run = True
+        Pibe.POV_jump = False
+        Pibe.jump_vel = Pibe.JUMP_VEL
+        Pibe.rect = pygame.Rect(Pibe.X_POS, Pibe.Y_POS, img.get_width(), img.get_height())
+        Pibe.color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+        Pibe.step_index = 0
+
+    def update(Pibe):
+        if Pibe.POV_run:
+            Pibe.run()
+        if Pibe.POV_jump:
+            Pibe.jump()
+        if Pibe.step_index >= 10:
+            Pibe.step_index = 0
+
+    def jump(Pibe):
+        Pibe.image = SALTAR
+        if Pibe.POV_jump:
+            Pibe.rect.y -= Pibe.jump_vel * 4
+            Pibe.jump_vel -= 0.8
+        if Pibe.jump_vel <= -Pibe.JUMP_VEL:
+            Pibe.POV_jump = False
+            Pibe.POV_run = True
+            Pibe.jump_vel = Pibe.JUMP_VEL
+
+    def run(Pibe):
+        Pibe.image = CORRER[Pibe.step_index // 5]
+        Pibe.rect.x = Pibe.X_POS
+        Pibe.rect.y = Pibe.Y_POS
+        Pibe.step_index += 1
+
+    def draw(Pibe, RESOLUCIO):
+        RESOLUCIO.blit(Pibe.image, (Pibe.rect.x, Pibe.rect.y))
+        pygame.draw.rect(RESOLUCIO, Pibe.color, (Pibe.rect.x, Pibe.rect.y, Pibe.rect.width, Pibe.rect.height), 2)
+        for obstacle in obstacles:
+            pygame.draw.line(RESOLUCIO, Pibe.color, (Pibe.rect.x + 75, Pibe.rect.y + 12), obstacle.rect.center, 2)
+
+
+class Obstacle:
+    def __init__(self, image, nombre_de_obs):
+        self.image = image
+        self.type = nombre_de_obs
+        self.rect = self.image[self.type].get_rect()
+        self.rect.x = AMPLADA_PANTALLA
+
+    def update(self):
+        self.rect.x -= velocitat_joc
+        if self.rect.x < -self.rect.width:
+            obstacles.pop()
+
+    def draw(self, SCREEN):
+        SCREEN.blit(self.image[self.type], self.rect)
+
+
+class ObstaclePetit(Obstacle):
+    def __init__(self, image, numero_de_obstacle):
+        super().__init__(image, numero_de_obstacle)
+        self.rect.y = 330
+
+
+class ObstacleGran(Obstacle):
+    def __init__(self, image, numero_de_obstacle):
+        super().__init__(image, numero_de_obstacle)
+        self.rect.y = 310
+
+def remove(index):
+    monigotes.pop(index)
+    ge.pop(index)
+    nets.pop(index)
+
+
+def distancia(pos_a, pos_b):
+    dx = pos_a[0] - pos_b[0]
+    dy = pos_a[1] - pos_b[1]
+    return math.sqrt(dx ** 2 + dy ** 2)
+
+
+def eval_genomes(genomes, config):
+    global velocitat_joc, x_pos_bg, y_pos_bg, obstacles, monigotes, ge, nets, punts, obstacle
+    clock = pygame.time.Clock()
+    punts = 0
+
+    obstacles = []
+    monigotes = []
+    ge = []
+    nets = []
+
+    x_pos_bg = 0
+    y_pos_bg = 380
+    velocitat_joc = 20
+
+    for genome_id, genome in genomes:
+        monigotes.append(Pibe())
+        ge.append(genome)
+        net = neat.nn.FeedForwardNetwork.create(genome, config)
+        nets.append(net)
+        genome.fitness = 0
+
+    def puntuacio():
+        global punts, velocitat_joc
+        punts += 1
+        if punts % 100 == 0:
+            velocitat_joc += 1
+        if velocitat_joc >= 50:
+            velocitat_joc = 50
+        text = TEXT.render(f'Punts:  {str(punts)}', True, (0, 0, 0))
+        RESOLUCIO.blit(text, (950, 50))
+        text_3 = TEXT.render(f'Velocitat del joc:  {str(velocitat_joc)}', True, (0, 0, 0))
+        RESOLUCIO.blit(text_3, (50, 510))
+
+    def fons():
+        global x_pos_bg, y_pos_bg
+        image_width = FONS_JOC.get_width()
+        RESOLUCIO.blit(FONS_JOC, (x_pos_bg, y_pos_bg))
+        RESOLUCIO.blit(FONS_JOC, (image_width + x_pos_bg, y_pos_bg))
+        if x_pos_bg <= -image_width:
+            x_pos_bg = 0
+        x_pos_bg -= velocitat_joc
+
+    run = True
+    while run:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+
+        RESOLUCIO.fill((255, 255, 255))
+
+        for pibes in monigotes:
+            pibes.update()
+            pibes.draw(RESOLUCIO)
+
+        if len(monigotes) == 0:
+            break
+
+        if len(obstacles) == 0:
+            rand_int = random.randint(0, 1)
+            if rand_int == 0:
+                obstacles.append(ObstaclePetit(OBSTACLE_BAIX, random.randint(0, 2)))
+            elif rand_int == 1:
+                obstacles.append(ObstacleGran(OBSTACLE_ALT, random.randint(0, 2)))
+
+        for obstacle in obstacles:
+            obstacle.draw(RESOLUCIO)
+            obstacle.update()
+            for i, pibes in enumerate(monigotes):
+                if pibes.rect.colliderect(obstacle.rect):
+                    ge[i].fitness -= 1
+                    remove(i)
+
+        for i, pibes in enumerate(monigotes):
+            output = nets[i].activate((pibes.rect.y,
+                                       distancia((pibes.rect.x, pibes.rect.y), obstacle.rect.midtop)))
+            if output[0] > 0.5 and pibes.rect.y == pibes.Y_POS:
+                pibes.POV_jump = True
+                pibes.POV_run = False
+
+        def datos():
+            global monigotes, ge
+            text_1 = TEXT.render(f'Pibes vius:  {str(len(monigotes))}', True, (0, 0, 0))
+            text_2 = TEXT.render(f'Generació:  {pop.generation + 1}', True, (0, 0, 0))
+
+            RESOLUCIO.blit(text_1, (50, 450))
+            RESOLUCIO.blit(text_2, (50, 480))
+
+        datos()
+        puntuacio()
+        fons()
+        clock.tick(30)
+        pygame.display.update()
+
+# Aquesta configuració del camí de neat me la done ja des de la pàgina oficial
+
+def run(config_path):
+    global pop
+    config = neat.config.Config(
+        neat.DefaultGenome,
+        neat.DefaultReproduction,
+        neat.DefaultSpeciesSet,
+        neat.DefaultStagnation,
+        config_path
+    )
+
+    pop = neat.Population(config)
+    pop.run(eval_genomes, 50)
+
+
+if __name__ == '__main__':
+    local_dir = os.path.dirname(__file__)
+    config_path = os.path.join(local_dir, '../MonigoteSaltarín/config.txt')
+    run(config_path)
